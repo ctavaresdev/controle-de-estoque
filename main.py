@@ -1,75 +1,176 @@
-import json
-estoque = {}
+import sqlite3
 
-def carregarEstoque():
-    try:
-        with open ("estoque.json","r") as arquivo:
-            return json.load(arquivo)
-        
-    except FileNotFoundError:
-        return{}
+def criarTabela():
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS produtos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT UNIQUE,
+        quantidade INTEGER
+                   
+) 
+""")
 
+    conexao.commit()
 
-def salvarEstoque():
-    with open ("estoque.json","w") as arquivo:
-        json.dump(estoque,arquivo)
+    conexao.close()
+
 
 def novoProduto():
     nome = input("Qual o nome do produto? ")
-    if nome in estoque:
-        print("esse produto já está no estoque")
-        return
-       
     quantidade = int(input("quantos vc deseja adicionar "))
-    estoque[nome] = quantidade
-    salvarEstoque()
-    print("produto adicionado com sucesso")
+
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute(
+            """
+            INSERT INTO produtos(nome, quantidade)
+            VALUES (?, ?)
+            """,
+            (nome,quantidade)
+        )
+
+        conexao.commit()
+        print("estoque atualizado com sucesso!")
+
+    except sqlite3.IntegrityError:
+        print("o produto já existe!")
+
+    finally:
+        conexao.close()
 
 def entProduto():
     nome = input("qual o nome do produto? ")
-    if nome not in estoque:
-        print("o produto não foi encontrado ")
+    quantidade = int(input("quantos itens vc deseja adicionar? "))
+
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
+
+    cursor.execute(
+        "SELECT quantidade FROM produtos WHERE nome = ?",
+        (nome,)
+
+    )
+
+    resultado = cursor.fetchone()
+
+    if resultado is None:
+        print("Produto não encontrado!")
+        conexao.close()
         return
-    quantidade = int(input("quantos itens vc deseja adicionar "))
-    estoque[nome] += quantidade
-    print("estoque foi atualizado")
-    salvarEstoque()
+    
+    quantidade_atual = resultado[0]
+
+    nova_quantidade = quantidade_atual + quantidade
+
+    cursor.execute(
+    """
+        UPDATE produtos
+        SET quantidade = ?
+        WHERE nome = ?
+        """,
+        (nova_quantidade, nome)
+    )
+
+    conexao.commit()
+    conexao.close()
+
+    print("Estoque atualizado!")
+
 
 def saidaProduto():
-    nome =  input("qual o nome do produto? ")
-    if nome not in estoque:
-        print("o produto não foi encontrado")
-        return
-    
+    nome =  input("qual o nome do produto? ") 
     quantidade = int(input("quantos itens vc deseja remover? "))
-    if  quantidade > estoque[nome]:
-        print("valor menor que o estoque atual")
-        return
-    estoque[nome] -= quantidade
-    salvarEstoque()
-    print("saída registrada")
 
-def removerEstoque():
-    nome = input("qual produto deseja remover? ")
-    if nome not in estoque:
-        print("o produto não foi encontrado")
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
+
+    cursor.execute(
+        "SELECT quantidade FROM produtos WHERE nome = ?",
+        (nome,)
+
+    )
+
+    resultado = cursor.fetchone()
+
+    if resultado is None:
+        print("Produto não encontrado!")
+        conexao.close()
         return
     
-  
-    del estoque[nome] 
-    salvarEstoque()
-    print("item foi removido")
+    quantidade_atual = resultado[0]
+
+    if quantidade > quantidade_atual:
+        print("quantidade insuficiente no estoque!")
+        conexao.close()
+        return
+    
+    nova_quantidade = quantidade_atual - quantidade
+
+    cursor.execute(
+    """
+        UPDATE produtos
+        SET quantidade = ?
+        WHERE nome = ?
+        """,
+        (nova_quantidade, nome)
+    )
+
+    conexao.commit()
+    conexao.close()
+
+    print("Estoque atualizado!")
+
+def removerProduto():
+    nome = input("Nome do produto: ")
+
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
+
+    cursor.execute(
+    "SELECT * FROM produtos WHERE nome = ?",
+    (nome,)
+    )
+
+    produto = cursor.fetchone()
+
+    if produto is None:
+        print("Produto não encontrado!")
+        conexao.close()
+        return
+
+    cursor.execute(
+    "DELETE FROM produtos WHERE nome = ?",
+    (nome,)
+    )
+
+    conexao.commit()
+    conexao.close()
+
+    print("Produto removido com sucesso!")
 
 
 def listaEstoque():
-    print("\n===ESTOQUE===")
+    conexao = sqlite3.connect("estoque.db")
+    cursor = conexao.cursor()
 
-    if not estoque:
-        print("o produto não foi encontrado")
-        return
+    cursor.execute("SELECT * FROM produtos")
+
+    produtos = cursor.fetchall()
+
+    conexao.close()
+
+    print("\n=== ESTOQUE ===")
+
+    for id_produto, nome, quantidade in produtos:
+        print(f"ID: {id_produto}")
+        print(f"Nome: {nome}")
+        print(f"Quantidade: {quantidade}")
+        print("-" * 20)
     
-    for produto,quantidade in estoque.items():
-        print(f"{produto}: {quantidade}")
 
 def menu():
 
@@ -80,7 +181,7 @@ def menu():
     print("5 - Listar estoque")
     print("6 - Sair")
 
-estoque = carregarEstoque()
+criarTabela()
 while True:
     menu()
 
@@ -96,7 +197,7 @@ while True:
         saidaProduto()
 
     elif opcao == "4":
-        removerEstoque()
+        removerProduto()
 
     elif opcao == "5":
         listaEstoque()    
